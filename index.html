@@ -346,17 +346,31 @@ function clearMarkers() {
 
 function addMarker(d, idx, deals) {
   const cfg = STATUS[d.deal_status] || { color: '#94a3b8', label: d.deal_status };
-  const el  = document.createElement('div');
+
+  // Outer wrapper — Mapbox positions this, never touch its transform
+  const el = document.createElement('div');
   el.style.cssText = [
-    `width:13px; height:13px; border-radius:50%;`,
-    `background:${cfg.color};`,
-    `border:2px solid rgba(255,255,255,.35);`,
-    `cursor:pointer;`,
-    `box-shadow: 0 0 0 3px ${cfg.color}44;`,
-    `transition: transform .15s;`
+    'width:24px; height:24px;',
+    'display:flex; align-items:center; justify-content:center;',
+    'cursor:pointer;'
   ].join('');
-  el.onmouseenter = () => el.style.transform = 'scale(1.7)';
-  el.onmouseleave = () => el.style.transform = 'scale(1)';
+
+  // Inner dot — safe to animate
+  const dot = document.createElement('div');
+  dot.style.cssText = [
+    'width:13px; height:13px; border-radius:50%;',
+    `background:${cfg.color};`,
+    'border:2px solid rgba(255,255,255,.35);',
+    `box-shadow: 0 0 0 3px ${cfg.color}44;`,
+    'transition: transform .15s;',
+    'transform-origin: center center;'
+  ].join('');
+
+  el.appendChild(dot);
+
+  // Hover on outer wrapper, animate inner dot only
+  el.addEventListener('mouseenter', () => dot.style.transform = 'scale(1.7)');
+  el.addEventListener('mouseleave', () => dot.style.transform = 'scale(1)');
 
   const popup = new mapboxgl.Popup({ offset: 14, closeButton: true, maxWidth: '320px' })
     .setHTML(popupHTML(d, cfg));
@@ -365,6 +379,7 @@ function addMarker(d, idx, deals) {
     .setLngLat([+d.longitude, +d.latitude])
     .setPopup(popup)
     .addTo(map);
+
   markers.push(m);
 }
 
