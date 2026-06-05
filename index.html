@@ -9,26 +9,8 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
-    #app { display: flex; height: 100vh; }
-<!-- Mobile sidebar toggle — hidden on desktop -->
-<button id="toggle-sidebar" onclick="
-  document.getElementById('sidebar').classList.toggle('open')
-" style="
-  display: none;
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 20;
-  background: #203f96;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-">☰ Filters</button>
+    #app { display: flex; height: 100vh; position: relative; }
+
     /* ── Sidebar ── */
     #sidebar {
       width: 320px; min-width: 320px;
@@ -40,27 +22,7 @@
     #sidebar-header { padding: 18px 20px; background: #0f172a; border-bottom: 1px solid #334155; }
     #sidebar-header h1 { font-size: 15px; font-weight: 700; color: #f1f5f9; margin-bottom: 3px; }
     #sidebar-header p  { font-size: 11px; color: #64748b; }
-/* Add inside your existing <style> tag */
-@media (max-width: 768px) {
-  #sidebar {
-    position: absolute;
-    top: 0;
-    left: -280px;  /* hidden off-screen */
-    z-index: 10;
-    transition: left 0.3s ease;
-    height: 100%;
-  }
-  #sidebar.open {
-    left: 0;
-  }
-  #map {
-    width: 100% !important;
-    left: 0 !important;
-  }
-  #toggle-sidebar {
-    display: block !important;
-  }
-}
+
     /* Stats bar */
     #stats-bar { display: flex; gap: 8px; padding: 12px 20px; background: #0f172a; border-bottom: 1px solid #334155; }
     .stat { flex: 1; text-align: center; background: #1e293b; border-radius: 8px; padding: 8px 4px; }
@@ -171,6 +133,46 @@
       font-size: 14px; color: #94a3b8; z-index: 999;
       border: 1px solid #334155; box-shadow: 0 4px 24px rgba(0,0,0,.4);
     }
+
+    /* ── Mobile toggle button ── */
+    #toggle-sidebar {
+      display: none;
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 20;
+      background: #203f96;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    /* ── Mobile responsive ── */
+    @media (max-width: 768px) {
+      #sidebar {
+        position: absolute;
+        top: 0;
+        left: -320px;
+        z-index: 10;
+        transition: left 0.3s ease;
+        height: 100%;
+      }
+      #sidebar.open {
+        left: 0;
+      }
+      #map {
+        width: 100% !important;
+        left: 0 !important;
+      }
+      #toggle-sidebar {
+        display: block !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -178,6 +180,10 @@
 <div id="loading">⚡ Loading deals…</div>
 
 <div id="app">
+
+  <!-- Mobile sidebar toggle — hidden on desktop, shown on mobile via CSS -->
+  <button id="toggle-sidebar" onclick="document.getElementById('sidebar').classList.toggle('open')">☰ Filters</button>
+
   <div id="sidebar">
 
     <div id="sidebar-header">
@@ -215,18 +221,20 @@
     <div id="no-results">No deals match your current filters.</div>
 
   </div>
+
   <div id="map"></div>
+
 </div>
 
 <script>
 // ============================================================
-//  CONFIG — update these two values
+//  CONFIG
 // ============================================================
 const DATA_URL   = 'https://script.google.com/macros/s/AKfycbw1aMLgBNM5Qy-T2Kf-l2alT9paBIfpmRzEpJ7SYEDFKFyGJKbVR4pG7KzJahq7hqfX5Q/exec';
-const MAPBOX_KEY = 'pk.eyJ1IjoiY3N3YXJ0eSIsImEiOiJjbXEwNXg3OTAwb3QwMnJvajhxMzl4cjliIn0.nk_u3rrvURbPnSAJwPPGRA'; // Get free token at mapbox.com
+const MAPBOX_KEY = 'pk.eyJ1IjoiY3N3YXJ0eSIsImEiOiJjbXEwNXg3OTAwb3QwMnJvajhxMzl4cjliIn0.nk_u3rrvURbPnSAJwPPGRA';
 
 // ============================================================
-//  STATUS CONFIG  (key must match deal_status values in Sheet)
+//  STATUS CONFIG
 // ============================================================
 const STATUS = {
   fully_blocked:   { label: 'Fully Blocked / Denied', color: '#ef4444' },
@@ -385,7 +393,6 @@ function clearMarkers() {
 function addMarker(d, idx, deals) {
   const cfg = STATUS[d.deal_status] || { color: '#94a3b8', label: d.deal_status };
 
-  // Outer wrapper — Mapbox positions this, never touch its transform
   const el = document.createElement('div');
   el.style.cssText = [
     'width:24px; height:24px;',
@@ -393,7 +400,6 @@ function addMarker(d, idx, deals) {
     'cursor:pointer;'
   ].join('');
 
-  // Inner dot — safe to animate
   const dot = document.createElement('div');
   dot.style.cssText = [
     'width:13px; height:13px; border-radius:50%;',
@@ -406,7 +412,6 @@ function addMarker(d, idx, deals) {
 
   el.appendChild(dot);
 
-  // Hover on outer wrapper, animate inner dot only
   el.addEventListener('mouseenter', () => dot.style.transform = 'scale(1.7)');
   el.addEventListener('mouseleave', () => dot.style.transform = 'scale(1)');
 
