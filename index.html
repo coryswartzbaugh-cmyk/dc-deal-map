@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>US Data Center Deal Tracker</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; }
+    #app { display: flex; height: 100vh; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 320px; min-width: 320px;
+      background: #1e293b;
+      display: flex; flex-direction: column;
+      border-right: 1px solid #334155;
+      overflow: hidden; z-index: 10;
+    }
+    #sidebar-header { padding: 18px 20px; background: #0f172a; border-bottom: 1px solid #334155; }
+    #sidebar-header h1 { font-size: 15px; font-weight: 700; color: #f1f5f9; margin-bottom: 3px; }
+    #sidebar-header p  { font-size: 11px; color: #64748b; }
+
+    /* Stats bar */
+    #stats-bar { display: flex; gap: 8px; padding: 12px 20px; background: #0f172a; border-bottom: 1px solid #334155; }
+    .stat { flex: 1; text-align: center; background: #1e293b; border-radius: 8px; padding: 8px 4px; }
+    .stat-value { font-size: 20px; font-weight: 700; color: #38bdf8; }
+    .stat-label { font-size: 10px; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: .04em; }
+
+    /* Search */
+    #search-wrap { padding: 14px 20px 6px; }
+    #search {
+      width: 100%; padding: 9px 13px;
+      background: #0f172a; border: 1px solid #334155;
+      border-radius: 8px; color: #e2e8f0; font-size: 13px; outline: none;
+    }
+    #search:focus { border-color: #38bdf8; }
+    #search::placeholder { color: #475569; }
+
+    /* Filters */
+    #filters { padding: 4px 20px 14px; border-bottom: 1px solid #334155; }
+    .filter-label {
+      font-size: 10px; font-weight: 700; color: #475569;
+      text-transform: uppercase; letter-spacing: .06em;
+      margin: 12px 0 7px;
+    }
+    .status-filters { display: flex; flex-direction: column; gap: 5px; }
+    .status-chip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border-radius: 6px;
+      cursor: pointer; border: 1px solid #334155;
+      background: #0f172a; transition: all .15s; user-select: none;
+    }
+    .status-chip.active  { border-color: transparent; }
+    .status-chip:hover   { opacity: .85; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .chip-label { font-size: 12px; font-weight: 500; flex: 1; }
+    .chip-count {
+      font-size: 11px; color: #64748b;
+      background: rgba(0,0,0,.3); padding: 1px 7px; border-radius: 10px;
+    }
+    #year-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+    .year-chip {
+      padding: 4px 11px; border-radius: 20px;
+      background: #0f172a; border: 1px solid #334155;
+      font-size: 12px; cursor: pointer; color: #94a3b8; transition: all .15s;
+    }
+    .year-chip.active { background: #38bdf8; border-color: #38bdf8; color: #0f172a; font-weight: 700; }
+
+    /* Results list */
+    #results { flex: 1; overflow-y: auto; }
+    .result-item {
+      padding: 11px 20px; border-bottom: 1px solid #1a2744;
+      cursor: pointer; transition: background .1s;
+    }
+    .result-item:hover { background: #243247; }
+    .result-name { font-size: 12px; font-weight: 600; color: #e2e8f0; margin-bottom: 5px; line-height: 1.35; }
+    .result-meta { display: flex; align-items: center; gap: 7px; }
+    .r-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .r-dev  { font-size: 11px; color: #64748b; }
+    .r-mw   { font-size: 11px; color: #475569; margin-left: auto; white-space: nowrap; }
+
+    #no-results { padding: 40px 20px; text-align: center; color: #475569; font-size: 13px; display: none; }
+
+    /* Map */
+    #map { flex: 1; }
+
+    /* Popup overrides */
+    .mapboxgl-popup-content {
+      background: #1e293b !important;
+      color: #e2e8f0 !important;
+      border-radius: 10px !important;
+      padding: 0 !important;
+      max-width: 310px !important;
+      border: 1px solid #334155 !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5) !important;
+      overflow: hidden;
+    }
+    .mapboxgl-popup-tip { display: none !important; }
+    .mapboxgl-popup-close-button {
+      color: #64748b !important; font-size: 20px !important;
+      padding: 6px 10px !important; z-index: 1;
+    }
+    .p-header {
+      padding: 14px 36px 10px 14px;
+      border-bottom: 1px solid #334155;
+    }
+    .p-title { font-size: 13px; font-weight: 700; color: #f1f5f9; line-height: 1.4; margin-bottom: 8px; }
+    .p-badge {
+      display: inline-block; padding: 3px 10px;
+      border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .p-body { padding: 8px 14px 12px; }
+    .p-row {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 5px 0; border-top: 1px solid #253347; gap: 12px;
+    }
+    .p-row:first-child { border-top: none; }
+    .p-key { font-size: 11px; color: #64748b; flex-shrink: 0; padding-top: 1px; }
+    .p-val { font-size: 11px; color: #cbd5e1; text-align: right; line-height: 1.4; }
+    .p-reason {
+      font-size: 11px; color: #94a3b8; margin-top: 10px; line-height: 1.6;
+      border-top: 1px solid #253347; padding-top: 10px;
+      max-height: 90px; overflow-y: auto;
+    }
+
+    /* Loading overlay */
+    #loading {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      background: #1e293b; padding: 20px 32px; border-radius: 12px;
+      font-size: 14px; color: #94a3b8; z-index: 999;
+      border: 1px solid #334155; box-shadow: 0 4px 24px rgba(0,0,0,.4);
+    }
+  </style>
+</head>
+<body>
+
+<div id="loading">⚡ Loading deals…</div>
+
+<div id="app">
+  <div id="sidebar">
+
+    <div id="sidebar-header">
+      <h1>🗺️ US Data Center Deal Tracker</h1>
+      <p>Blocked, withdrawn &amp; stalled projects across America</p>
+    </div>
+
+    <div id="stats-bar">
+      <div class="stat">
+        <div class="stat-value" id="stat-shown">—</div>
+        <div class="stat-label">Visible</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="stat-gw">—</div>
+        <div class="stat-label">GW Blocked</div>
+      </div>
+    </div>
+
+    <div id="search-wrap">
+      <input id="search" type="text" placeholder="🔍  Search developer or location…" />
+    </div>
+
+    <div id="filters">
+      <div class="filter-label">Status</div>
+      <div class="status-filters" id="status-filters"></div>
+      <div class="filter-label">Year</div>
+      <div id="year-filter"></div>
+    </div>
+
+    <div id="results"></div>
+    <div id="no-results">No deals match your current filters.</div>
+
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+// ============================================================
+//  CONFIG — update these two values
+// ============================================================
+const DATA_URL   = 'https://script.google.com/macros/s/AKfycbw1aMLgBNM5Qy-T2Kf-l2alT9paBIfpmRzEpJ7SYEDFKFyGJKbVR4pG7KzJahq7hqfX5Q/exec';
+const MAPBOX_KEY = 'pk.eyJ1IjoiY3N3YXJ0eSIsImEiOiJjbXEwNXg3OTAwb3QwMnJvajhxMzl4cjliIn0.nk_u3rrvURbPnSAJwPPGRA'; // Get free token at mapbox.com
+
+// ============================================================
+//  STATUS CONFIG  (key must match deal_status values in Sheet)
+// ============================================================
+const STATUS = {
+  fully_blocked:   { label: 'Fully Blocked / Denied', color: '#ef4444' },
+  withdrawn:       { label: 'Withdrawn by Developer',  color: '#f97316' },
+  legal_challenge: { label: 'Under Legal Challenge',   color: '#a855f7' },
+  delayed:         { label: 'Delayed / Deferred',      color: '#eab308' },
+  moratorium:      { label: 'Moratorium Zone',         color: '#6b7280' },
+};
+
+// ============================================================
+//  STATE
+// ============================================================
+let allDeals = [], markers = [];
+let activeStatuses = new Set(Object.keys(STATUS));
+let activeYears    = new Set(['all']);
+let searchQuery    = '';
+
+// ============================================================
+//  MAP INIT
+// ============================================================
+mapboxgl.accessToken = MAPBOX_KEY;
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/dark-v11',
+  center: [-95.7, 37.5],
+  zoom: 3.8
+});
+map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+
+// ============================================================
+//  FETCH
+// ============================================================
+fetch(DATA_URL)
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('loading').style.display = 'none';
+    allDeals = data.filter(d => d.latitude && d.longitude);
+    document.getElementById('stat-total').textContent = allDeals.length;
+    buildFilters();
+    renderAll();
+  })
+  .catch(() => {
+    document.getElementById('loading').textContent =
+      '⚠️ Could not load data. Check your Apps Script URL.';
+  });
+
+// ============================================================
+//  BUILD FILTERS
+// ============================================================
+function buildFilters() {
+  // Status chips
+  const sf = document.getElementById('status-filters');
+  Object.entries(STATUS).forEach(([key, cfg]) => {
+    const n = allDeals.filter(d => d.deal_status === key).length;
+    const chip = document.createElement('div');
+    chip.className = 'status-chip active';
+    chip.style.cssText = `background:${cfg.color}20; border-color:${cfg.color};`;
+    chip.innerHTML = `
+      <span class="status-dot" style="background:${cfg.color}"></span>
+      <span class="chip-label">${cfg.label}</span>
+      <span class="chip-count">${n}</span>`;
+    chip.addEventListener('click', () => {
+      if (activeStatuses.has(key)) {
+        activeStatuses.delete(key);
+        chip.classList.remove('active');
+        chip.style.cssText = 'background:#0f172a; border-color:#334155;';
+      } else {
+        activeStatuses.add(key);
+        chip.classList.add('active');
+        chip.style.cssText = `background:${cfg.color}20; border-color:${cfg.color};`;
+      }
+      renderAll();
+    });
+    sf.appendChild(chip);
+  });
+
+  // Year chips
+  const years = [...new Set(
+    allDeals.map(d => d.date_of_cancellation
+      ? new Date(d.date_of_cancellation).getFullYear() : null
+    ).filter(Boolean)
+  )].sort();
+
+  const yf = document.getElementById('year-filter');
+
+  const allChip = mkYearChip('All', true);
+  allChip.addEventListener('click', () => {
+    activeYears = new Set(['all']);
+    yf.querySelectorAll('.year-chip').forEach(c => c.classList.remove('active'));
+    allChip.classList.add('active');
+    renderAll();
+  });
+  yf.appendChild(allChip);
+
+  years.forEach(y => {
+    const c = mkYearChip(y, false);
+    c.addEventListener('click', () => {
+      activeYears.delete('all');
+      yf.querySelector('.year-chip').classList.remove('active');
+      if (activeYears.has(y)) {
+        activeYears.delete(y); c.classList.remove('active');
+        if (!activeYears.size) { activeYears.add('all'); allChip.classList.add('active'); }
+      } else {
+        activeYears.add(y); c.classList.add('active');
+      }
+      renderAll();
+    });
+    yf.appendChild(c);
+  });
+}
+
+function mkYearChip(label, active) {
+  const c = document.createElement('div');
+  c.className = 'year-chip' + (active ? ' active' : '');
+  c.textContent = label;
+  return c;
+}
+
+// ============================================================
+//  FILTER
+// ============================================================
+function filtered() {
+  return allDeals.filter(d => {
+    if (!activeStatuses.has(d.deal_status)) return false;
+    if (!activeYears.has('all')) {
+      const y = d.date_of_cancellation
+        ? new Date(d.date_of_cancellation).getFullYear() : null;
+      if (!y || !activeYears.has(y)) return false;
+    }
+    if (searchQuery) {
+      const haystack = [d.project_name, d.developer_name, d.end_user, d.opposition_groups]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(searchQuery.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+
+// ============================================================
+//  RENDER
+// ============================================================
+function renderAll() {
+  const deals = filtered();
+  clearMarkers();
+  deals.forEach((d, i) => addMarker(d, i, deals));
+  renderList(deals);
+  updateStats(deals);
+}
+
+function clearMarkers() {
+  markers.forEach(m => m.remove());
+  markers = [];
+}
+
+function addMarker(d, idx, deals) {
+  const cfg = STATUS[d.deal_status] || { color: '#94a3b8', label: d.deal_status };
+  const el  = document.createElement('div');
+  el.style.cssText = [
+    `width:13px; height:13px; border-radius:50%;`,
+    `background:${cfg.color};`,
+    `border:2px solid rgba(255,255,255,.35);`,
+    `cursor:pointer;`,
+    `box-shadow: 0 0 0 3px ${cfg.color}44;`,
+    `transition: transform .15s;`
+  ].join('');
+  el.onmouseenter = () => el.style.transform = 'scale(1.7)';
+  el.onmouseleave = () => el.style.transform = 'scale(1)';
+
+  const popup = new mapboxgl.Popup({ offset: 14, closeButton: true, maxWidth: '320px' })
+    .setHTML(popupHTML(d, cfg));
+
+  const m = new mapboxgl.Marker(el)
+    .setLngLat([+d.longitude, +d.latitude])
+    .setPopup(popup)
+    .addTo(map);
+  markers.push(m);
+}
+
+function popupHTML(d, cfg) {
+  const mw   = d.capacity_mw ? (+d.capacity_mw).toLocaleString() + ' MW' : '—';
+  const date = d.date_of_cancellation
+    ? new Date(d.date_of_cancellation).toLocaleDateString('en-US',{month:'short',year:'numeric'})
+    : 'Ongoing';
+  const lz = (d.legal_zoning_status || '—').replace(/_/g,' ');
+  const eu = d.end_user ? row('End User', d.end_user) : '';
+  const opp = d.opposition_groups ? row('Opposition', d.opposition_groups) : '';
+
+  return `
+    <div class="p-header">
+      <div class="p-title">${d.project_name || '—'}</div>
+      <span class="p-badge" style="background:${cfg.color}22;color:${cfg.color};border:1px solid ${cfg.color}55">
+        ${cfg.label}
+      </span>
+    </div>
+    <div class="p-body">
+      ${row('Developer', d.developer_name || '—')}
+      ${eu}
+      ${row('Capacity', mw)}
+      ${row('Date', date)}
+      ${row('Legal Status', lz)}
+      ${opp}
+      ${d.cancellation_reason
+        ? `<div class="p-reason">${d.cancellation_reason}</div>` : ''}
+    </div>`;
+}
+
+function row(k, v) {
+  return `<div class="p-row"><span class="p-key">${k}</span><span class="p-val">${v}</span></div>`;
+}
+
+function renderList(deals) {
+  const list = document.getElementById('results');
+  const none = document.getElementById('no-results');
+  list.innerHTML = '';
+  none.style.display = deals.length ? 'none' : 'block';
+
+  deals.forEach((d, i) => {
+    const cfg  = STATUS[d.deal_status] || { color: '#94a3b8' };
+    const item = document.createElement('div');
+    item.className = 'result-item';
+    item.innerHTML = `
+      <div class="result-name">${d.project_name}</div>
+      <div class="result-meta">
+        <span class="r-dot" style="background:${cfg.color}"></span>
+        <span class="r-dev">${d.developer_name || '—'}</span>
+        ${d.capacity_mw ? `<span class="r-mw">${(+d.capacity_mw).toLocaleString()} MW</span>` : ''}
+      </div>`;
+    item.addEventListener('click', () => {
+      map.flyTo({ center:[+d.longitude,+d.latitude], zoom:9, duration:1100 });
+      setTimeout(() => markers[i]?.togglePopup(), 1200);
+    });
+    list.appendChild(item);
+  });
+}
+
+function updateStats(deals) {
+  const totalMW = deals.reduce((s, d) => s + (+d.capacity_mw || 0), 0);
+  const gw = totalMW >= 1000 ? (totalMW/1000).toFixed(1)+'k' : (totalMW || '—');
+  document.getElementById('stat-shown').textContent = deals.length;
+  document.getElementById('stat-gw').textContent    = gw;
+}
+
+// ============================================================
+//  SEARCH
+// ============================================================
+document.getElementById('search').addEventListener('input', e => {
+  searchQuery = e.target.value.trim();
+  renderAll();
+});
+</script>
+</body>
+</html>
